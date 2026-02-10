@@ -1,0 +1,466 @@
+import React from "react"
+import { Circuit } from "../dist"
+import * as fs from "fs"
+import * as path from "path"
+
+/**
+ * Export the STM32 motor/sensor control circuit to usable output files:
+ *   - Schematic SVG
+ *   - PCB SVG
+ *   - Circuit JSON (full netlist data)
+ */
+
+// ---- Pin definitions (same as test) ----
+
+const stm32PinLabels: Record<string, string> = {
+  pin1: "VBAT", pin2: "PC13", pin3: "PC14", pin4: "PC15",
+  pin5: "PD0", pin6: "PD1", pin7: "NRST", pin8: "VSSA",
+  pin9: "VDDA", pin10: "PA0", pin11: "PA1", pin12: "PA2",
+  pin13: "PA3", pin14: "PA4", pin15: "PA5", pin16: "PA6",
+  pin17: "PA7", pin18: "PB0", pin19: "PB1", pin20: "PB2",
+  pin21: "PB10", pin22: "PB11", pin23: "VSS1", pin24: "VDD1",
+  pin25: "PB12", pin26: "PB13", pin27: "PB14", pin28: "PB15",
+  pin29: "PA8", pin30: "PA9", pin31: "PA10", pin32: "PA11",
+  pin33: "PA12", pin34: "PA13", pin35: "PA14", pin36: "PA15",
+  pin37: "PB3", pin38: "PB4", pin39: "PB5", pin40: "PB6",
+  pin41: "PB7", pin42: "PB8", pin43: "PB9", pin44: "BOOT0",
+  pin45: "PB_UNUSED1", pin46: "PB_UNUSED2", pin47: "VSS2", pin48: "VDD2",
+}
+
+const a4988PinLabels: Record<string, string> = {
+  pin1: "EN", pin2: "MS1", pin3: "MS2", pin4: "MS3",
+  pin5: "RESET", pin6: "SLEEP", pin7: "STEP", pin8: "DIR",
+  pin9: "GND", pin10: "VDD", pin11: "1A", pin12: "1B",
+  pin13: "2A", pin14: "2B", pin15: "VMOT", pin16: "GND_MOT",
+}
+
+const mpu6050PinLabels: Record<string, string> = {
+  pin1: "AUX_CL", pin2: "AUX_DA", pin3: "NC1", pin4: "NC2",
+  pin5: "NC3", pin6: "NC4", pin7: "NC5", pin8: "CLKIN",
+  pin9: "AD0", pin10: "NC6", pin11: "NC7", pin12: "INT",
+  pin13: "VDD", pin14: "NC8", pin15: "NC9", pin16: "NC10",
+  pin17: "NC11", pin18: "GND", pin19: "RESV1", pin20: "CPOUT",
+  pin21: "RESV2", pin22: "RESV3", pin23: "SCL", pin24: "SDA",
+}
+
+const fdc1004PinLabels: Record<string, string> = {
+  pin1: "CIN1", pin2: "CIN2", pin3: "CIN3", pin4: "CIN4", pin5: "GND",
+  pin6: "SHLD", pin7: "VDD", pin8: "SCL", pin9: "SDA", pin10: "ADDR",
+}
+
+const ams1117PinLabels: Record<string, string> = {
+  pin1: "GND", pin2: "VOUT", pin3: "VIN",
+}
+
+const usbPinLabels: Record<string, string> = {
+  pin1: "VBUS", pin2: "DM", pin3: "DP", pin4: "GND",
+}
+
+const servoPinLabels: Record<string, string> = {
+  pin1: "GND", pin2: "VCC", pin3: "SIG",
+}
+
+const nema17PinLabels: Record<string, string> = {
+  pin1: "1A", pin2: "1B", pin3: "2A", pin4: "2B",
+}
+
+// ---- Build the circuit ----
+
+const circuit = new Circuit()
+
+circuit.add(
+  <board width={120} height={100}>
+    <net name="VCC3V3" />
+    <net name="GND" />
+    <net name="VBUS5V" />
+    <net name="VMOT" />
+    <net name="SERVO_VCC" />
+    <net name="I2C_SCL" />
+    <net name="I2C_SDA" />
+    <net name="USB_DM" />
+    <net name="USB_DP" />
+    <net name="STEP1" />
+    <net name="DIR1" />
+    <net name="EN1" />
+    <net name="STEP2" />
+    <net name="DIR2" />
+    <net name="EN2" />
+    <net name="STEP3" />
+    <net name="DIR3" />
+    <net name="EN3" />
+    <net name="STEP4" />
+    <net name="DIR4" />
+    <net name="EN4" />
+    <net name="SERVO1_PWM" />
+    <net name="SERVO2_PWM" />
+    <net name="IMU_INT" />
+
+    {/* STM32F103C8T6 */}
+    <chip
+      name="U1"
+      footprint="qfp48_w7mm_h7mm_p0.5mm_pw0.25mm_pl1mm"
+      pinLabels={stm32PinLabels}
+      schPinArrangement={{
+        leftSide: { pins: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], direction: "top-to-bottom" as const },
+        bottomSide: { pins: [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], direction: "left-to-right" as const },
+        rightSide: { pins: [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36], direction: "bottom-to-top" as const },
+        topSide: { pins: [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48], direction: "right-to-left" as const },
+      }}
+      pcbX={0} pcbY={0}
+    />
+
+    {/* A4988 Stepper Drivers x4 */}
+    <chip name="DRV1" footprint="soic16_w5.3mm_h10mm_p1.27mm" pinLabels={a4988PinLabels}
+      schPinArrangement={{ leftSide: { pins: [1,2,3,4,5,6,7,8], direction: "top-to-bottom" as const }, rightSide: { pins: [16,15,14,13,12,11,10,9], direction: "top-to-bottom" as const } }}
+      pcbX={-40} pcbY={-30} />
+    <chip name="DRV2" footprint="soic16_w5.3mm_h10mm_p1.27mm" pinLabels={a4988PinLabels}
+      schPinArrangement={{ leftSide: { pins: [1,2,3,4,5,6,7,8], direction: "top-to-bottom" as const }, rightSide: { pins: [16,15,14,13,12,11,10,9], direction: "top-to-bottom" as const } }}
+      pcbX={-40} pcbY={-10} />
+    <chip name="DRV3" footprint="soic16_w5.3mm_h10mm_p1.27mm" pinLabels={a4988PinLabels}
+      schPinArrangement={{ leftSide: { pins: [1,2,3,4,5,6,7,8], direction: "top-to-bottom" as const }, rightSide: { pins: [16,15,14,13,12,11,10,9], direction: "top-to-bottom" as const } }}
+      pcbX={-40} pcbY={10} />
+    <chip name="DRV4" footprint="soic16_w5.3mm_h10mm_p1.27mm" pinLabels={a4988PinLabels}
+      schPinArrangement={{ leftSide: { pins: [1,2,3,4,5,6,7,8], direction: "top-to-bottom" as const }, rightSide: { pins: [16,15,14,13,12,11,10,9], direction: "top-to-bottom" as const } }}
+      pcbX={-40} pcbY={30} />
+
+    {/* NEMA17 Motor Connectors x4 */}
+    <chip name="MOT1" footprint="pinrow4" pinLabels={nema17PinLabels} pcbX={-55} pcbY={-30} />
+    <chip name="MOT2" footprint="pinrow4" pinLabels={nema17PinLabels} pcbX={-55} pcbY={-10} />
+    <chip name="MOT3" footprint="pinrow4" pinLabels={nema17PinLabels} pcbX={-55} pcbY={10} />
+    <chip name="MOT4" footprint="pinrow4" pinLabels={nema17PinLabels} pcbX={-55} pcbY={30} />
+
+    {/* Servo Connectors x2 */}
+    <chip name="SERVO1" footprint="pinrow3" pinLabels={servoPinLabels} pcbX={30} pcbY={-30} />
+    <chip name="SERVO2" footprint="pinrow3" pinLabels={servoPinLabels} pcbX={30} pcbY={-20} />
+
+    {/* MPU6050 IMU */}
+    <chip name="U3" footprint="qfn24_w4mm_h4mm_p0.5mm_thermalpad" pinLabels={mpu6050PinLabels}
+      schPinArrangement={{
+        leftSide: { pins: [1, 2, 8, 9, 12, 13], direction: "top-to-bottom" as const },
+        rightSide: { pins: [18, 20, 23, 24], direction: "top-to-bottom" as const },
+        bottomSide: { pins: [3,4,5,6,7,10,11,14,15,16,17,19,21,22], direction: "left-to-right" as const },
+      }}
+      pcbX={30} pcbY={10} />
+
+    {/* FDC1004 Capacitance Sensor */}
+    <chip name="U4" footprint="tssop10_w3mm_h3mm_p0.5mm" pinLabels={fdc1004PinLabels}
+      schPinArrangement={{
+        leftSide: { pins: [1,2,3,4,5], direction: "top-to-bottom" as const },
+        rightSide: { pins: [10,9,8,7,6], direction: "top-to-bottom" as const },
+      }}
+      pcbX={30} pcbY={30} />
+
+    {/* AMS1117-3.3 LDO */}
+    <chip name="U2" footprint="sot223" pinLabels={ams1117PinLabels}
+      schPinArrangement={{
+        leftSide: { pins: [3], direction: "top-to-bottom" as const },
+        rightSide: { pins: [2], direction: "top-to-bottom" as const },
+        bottomSide: { pins: [1], direction: "left-to-right" as const },
+      }}
+      pcbX={-30} pcbY={40} />
+
+    {/* USB Connector */}
+    <chip name="J_USB" footprint="pinrow4" pinLabels={usbPinLabels} pcbX={-50} pcbY={40} />
+
+    {/* Crystal */}
+    <crystal name="Y1" frequency="8MHz" loadCapacitance="20pF" footprint="hc49" pcbX={10} pcbY={-20} />
+    <capacitor name="C_Y1" capacitance="20pF" footprint="0402" pcbX={7} pcbY={-25} />
+    <capacitor name="C_Y2" capacitance="20pF" footprint="0402" pcbX={13} pcbY={-25} />
+
+    {/* Decoupling Caps */}
+    <capacitor name="C1" capacitance="100nF" footprint="0402" pcbX={5} pcbY={8} />
+    <capacitor name="C2" capacitance="100nF" footprint="0402" pcbX={5} pcbY={-8} />
+    <capacitor name="C3" capacitance="100nF" footprint="0402" pcbX={-8} pcbY={-8} />
+    <capacitor name="C_IMU1" capacitance="100nF" footprint="0402" pcbX={35} pcbY={5} />
+    <capacitor name="C_IMU2" capacitance="10nF" footprint="0402" pcbX={35} pcbY={15} />
+    <capacitor name="C_FDC" capacitance="100nF" footprint="0402" pcbX={35} pcbY={25} />
+    <capacitor name="C_DRV1" capacitance="100nF" footprint="0402" pcbX={-35} pcbY={-35} />
+    <capacitor name="C_DRV2" capacitance="100nF" footprint="0402" pcbX={-35} pcbY={-15} />
+    <capacitor name="C_DRV3" capacitance="100nF" footprint="0402" pcbX={-35} pcbY={5} />
+    <capacitor name="C_DRV4" capacitance="100nF" footprint="0402" pcbX={-35} pcbY={25} />
+    <capacitor name="C_MOT1" capacitance="100uF" footprint="0805" pcbX={-45} pcbY={-35} />
+    <capacitor name="C_MOT2" capacitance="100uF" footprint="0805" pcbX={-45} pcbY={-15} />
+    <capacitor name="C_MOT3" capacitance="100uF" footprint="0805" pcbX={-45} pcbY={5} />
+    <capacitor name="C_MOT4" capacitance="100uF" footprint="0805" pcbX={-45} pcbY={25} />
+    <capacitor name="C_LDO_IN" capacitance="10uF" footprint="0805" pcbX={-35} pcbY={45} />
+    <capacitor name="C_LDO_OUT" capacitance="10uF" footprint="0805" pcbX={-25} pcbY={45} />
+
+    {/* I2C Pull-ups */}
+    <resistor name="R_SCL" resistance="4.7kohm" footprint="0402" pcbX={20} pcbY={5} />
+    <resistor name="R_SDA" resistance="4.7kohm" footprint="0402" pcbX={20} pcbY={15} />
+
+    {/* Status LED */}
+    <resistor name="R_LED" resistance="1kohm" footprint="0402" pcbX={15} pcbY={-35} />
+    <led name="LED1" footprint="0603" pcbX={20} pcbY={-35} />
+
+    {/* ===== ALL TRACES ===== */}
+
+    {/* Power */}
+    <trace from=".J_USB > .VBUS" to="net.VBUS5V" />
+    <trace from=".J_USB > .GND" to="net.GND" />
+    <trace from=".U2 > .VIN" to="net.VBUS5V" />
+    <trace from=".U2 > .VOUT" to="net.VCC3V3" />
+    <trace from=".U2 > .GND" to="net.GND" />
+    <trace from=".C_LDO_IN > .pin1" to="net.VBUS5V" />
+    <trace from=".C_LDO_IN > .pin2" to="net.GND" />
+    <trace from=".C_LDO_OUT > .pin1" to="net.VCC3V3" />
+    <trace from=".C_LDO_OUT > .pin2" to="net.GND" />
+
+    {/* STM32 power */}
+    <trace from=".U1 > .VDD1" to="net.VCC3V3" />
+    <trace from=".U1 > .VDD2" to="net.VCC3V3" />
+    <trace from=".U1 > .VDDA" to="net.VCC3V3" />
+    <trace from=".U1 > .VBAT" to="net.VCC3V3" />
+    <trace from=".U1 > .VSS1" to="net.GND" />
+    <trace from=".U1 > .VSS2" to="net.GND" />
+    <trace from=".U1 > .VSSA" to="net.GND" />
+    <trace from=".C1 > .pin1" to="net.VCC3V3" />
+    <trace from=".C1 > .pin2" to="net.GND" />
+    <trace from=".C2 > .pin1" to="net.VCC3V3" />
+    <trace from=".C2 > .pin2" to="net.GND" />
+    <trace from=".C3 > .pin1" to="net.VCC3V3" />
+    <trace from=".C3 > .pin2" to="net.GND" />
+
+    {/* Crystal */}
+    <trace from=".Y1 > .pin1" to=".U1 > .PD0" />
+    <trace from=".Y1 > .pin2" to=".U1 > .PD1" />
+    <trace from=".C_Y1 > .pin1" to=".Y1 > .pin1" />
+    <trace from=".C_Y1 > .pin2" to="net.GND" />
+    <trace from=".C_Y2 > .pin1" to=".Y1 > .pin2" />
+    <trace from=".C_Y2 > .pin2" to="net.GND" />
+
+    {/* USB data */}
+    <trace from=".J_USB > .DM" to=".U1 > .PA11" />
+    <trace from=".J_USB > .DP" to=".U1 > .PA12" />
+
+    {/* Stepper 1 */}
+    <trace from=".U1 > .PA0" to=".DRV1 > .STEP" />
+    <trace from=".U1 > .PA1" to=".DRV1 > .DIR" />
+    <trace from=".U1 > .PB0" to=".DRV1 > .EN" />
+    <trace from=".DRV1 > .VDD" to="net.VCC3V3" />
+    <trace from=".DRV1 > .GND" to="net.GND" />
+    <trace from=".DRV1 > .VMOT" to="net.VMOT" />
+    <trace from=".DRV1 > .GND_MOT" to="net.GND" />
+    <trace from=".DRV1 > .SLEEP" to="net.VCC3V3" />
+    <trace from=".DRV1 > .RESET" to="net.VCC3V3" />
+    <trace from=".U1 > .PB4" to=".DRV1 > .MS1" />
+    <trace from=".DRV1 > .MS2" to="net.GND" />
+    <trace from=".DRV1 > .MS3" to="net.GND" />
+    <trace from=".DRV1 > .1A" to=".MOT1 > .1A" />
+    <trace from=".DRV1 > .1B" to=".MOT1 > .1B" />
+    <trace from=".DRV1 > .2A" to=".MOT1 > .2A" />
+    <trace from=".DRV1 > .2B" to=".MOT1 > .2B" />
+    <trace from=".C_DRV1 > .pin1" to="net.VCC3V3" />
+    <trace from=".C_DRV1 > .pin2" to="net.GND" />
+    <trace from=".C_MOT1 > .pin1" to="net.VMOT" />
+    <trace from=".C_MOT1 > .pin2" to="net.GND" />
+
+    {/* Stepper 2 */}
+    <trace from=".U1 > .PA2" to=".DRV2 > .STEP" />
+    <trace from=".U1 > .PA3" to=".DRV2 > .DIR" />
+    <trace from=".U1 > .PB1" to=".DRV2 > .EN" />
+    <trace from=".DRV2 > .VDD" to="net.VCC3V3" />
+    <trace from=".DRV2 > .GND" to="net.GND" />
+    <trace from=".DRV2 > .VMOT" to="net.VMOT" />
+    <trace from=".DRV2 > .GND_MOT" to="net.GND" />
+    <trace from=".DRV2 > .SLEEP" to="net.VCC3V3" />
+    <trace from=".DRV2 > .RESET" to="net.VCC3V3" />
+    <trace from=".DRV2 > .MS1" to="net.GND" />
+    <trace from=".DRV2 > .MS2" to="net.GND" />
+    <trace from=".DRV2 > .MS3" to="net.GND" />
+    <trace from=".DRV2 > .1A" to=".MOT2 > .1A" />
+    <trace from=".DRV2 > .1B" to=".MOT2 > .1B" />
+    <trace from=".DRV2 > .2A" to=".MOT2 > .2A" />
+    <trace from=".DRV2 > .2B" to=".MOT2 > .2B" />
+    <trace from=".C_DRV2 > .pin1" to="net.VCC3V3" />
+    <trace from=".C_DRV2 > .pin2" to="net.GND" />
+    <trace from=".C_MOT2 > .pin1" to="net.VMOT" />
+    <trace from=".C_MOT2 > .pin2" to="net.GND" />
+
+    {/* Stepper 3 */}
+    <trace from=".U1 > .PA8" to=".DRV3 > .STEP" />
+    <trace from=".U1 > .PA9" to=".DRV3 > .DIR" />
+    <trace from=".U1 > .PB2" to=".DRV3 > .EN" />
+    <trace from=".DRV3 > .VDD" to="net.VCC3V3" />
+    <trace from=".DRV3 > .GND" to="net.GND" />
+    <trace from=".DRV3 > .VMOT" to="net.VMOT" />
+    <trace from=".DRV3 > .GND_MOT" to="net.GND" />
+    <trace from=".DRV3 > .SLEEP" to="net.VCC3V3" />
+    <trace from=".DRV3 > .RESET" to="net.VCC3V3" />
+    <trace from=".DRV3 > .MS1" to="net.GND" />
+    <trace from=".DRV3 > .MS2" to="net.GND" />
+    <trace from=".DRV3 > .MS3" to="net.GND" />
+    <trace from=".DRV3 > .1A" to=".MOT3 > .1A" />
+    <trace from=".DRV3 > .1B" to=".MOT3 > .1B" />
+    <trace from=".DRV3 > .2A" to=".MOT3 > .2A" />
+    <trace from=".DRV3 > .2B" to=".MOT3 > .2B" />
+    <trace from=".C_DRV3 > .pin1" to="net.VCC3V3" />
+    <trace from=".C_DRV3 > .pin2" to="net.GND" />
+    <trace from=".C_MOT3 > .pin1" to="net.VMOT" />
+    <trace from=".C_MOT3 > .pin2" to="net.GND" />
+
+    {/* Stepper 4 */}
+    <trace from=".U1 > .PA10" to=".DRV4 > .STEP" />
+    <trace from=".U1 > .PA4" to=".DRV4 > .DIR" />
+    <trace from=".U1 > .PB3" to=".DRV4 > .EN" />
+    <trace from=".DRV4 > .VDD" to="net.VCC3V3" />
+    <trace from=".DRV4 > .GND" to="net.GND" />
+    <trace from=".DRV4 > .VMOT" to="net.VMOT" />
+    <trace from=".DRV4 > .GND_MOT" to="net.GND" />
+    <trace from=".DRV4 > .SLEEP" to="net.VCC3V3" />
+    <trace from=".DRV4 > .RESET" to="net.VCC3V3" />
+    <trace from=".DRV4 > .MS1" to="net.GND" />
+    <trace from=".DRV4 > .MS2" to="net.GND" />
+    <trace from=".DRV4 > .MS3" to="net.GND" />
+    <trace from=".DRV4 > .1A" to=".MOT4 > .1A" />
+    <trace from=".DRV4 > .1B" to=".MOT4 > .1B" />
+    <trace from=".DRV4 > .2A" to=".MOT4 > .2A" />
+    <trace from=".DRV4 > .2B" to=".MOT4 > .2B" />
+    <trace from=".C_DRV4 > .pin1" to="net.VCC3V3" />
+    <trace from=".C_DRV4 > .pin2" to="net.GND" />
+    <trace from=".C_MOT4 > .pin1" to="net.VMOT" />
+    <trace from=".C_MOT4 > .pin2" to="net.GND" />
+
+    {/* Servos */}
+    <trace from=".U1 > .PA6" to=".SERVO1 > .SIG" />
+    <trace from=".SERVO1 > .VCC" to="net.VBUS5V" />
+    <trace from=".SERVO1 > .GND" to="net.GND" />
+    <trace from=".U1 > .PA7" to=".SERVO2 > .SIG" />
+    <trace from=".SERVO2 > .VCC" to="net.VBUS5V" />
+    <trace from=".SERVO2 > .GND" to="net.GND" />
+
+    {/* I2C bus */}
+    <trace from=".U1 > .PB6" to="net.I2C_SCL" />
+    <trace from=".U1 > .PB7" to="net.I2C_SDA" />
+    <trace from=".R_SCL > .pin1" to="net.VCC3V3" />
+    <trace from=".R_SCL > .pin2" to="net.I2C_SCL" />
+    <trace from=".R_SDA > .pin1" to="net.VCC3V3" />
+    <trace from=".R_SDA > .pin2" to="net.I2C_SDA" />
+
+    {/* MPU6050 */}
+    <trace from=".U3 > .SCL" to="net.I2C_SCL" />
+    <trace from=".U3 > .SDA" to="net.I2C_SDA" />
+    <trace from=".U3 > .VDD" to="net.VCC3V3" />
+    <trace from=".U3 > .GND" to="net.GND" />
+    <trace from=".U3 > .AD0" to="net.GND" />
+    <trace from=".U3 > .INT" to=".U1 > .PB5" />
+    <trace from=".C_IMU1 > .pin1" to="net.VCC3V3" />
+    <trace from=".C_IMU1 > .pin2" to="net.GND" />
+    <trace from=".C_IMU2 > .pin1" to="net.VCC3V3" />
+    <trace from=".C_IMU2 > .pin2" to="net.GND" />
+
+    {/* FDC1004 */}
+    <trace from=".U4 > .SCL" to="net.I2C_SCL" />
+    <trace from=".U4 > .SDA" to="net.I2C_SDA" />
+    <trace from=".U4 > .VDD" to="net.VCC3V3" />
+    <trace from=".U4 > .GND" to="net.GND" />
+    <trace from=".U4 > .ADDR" to="net.GND" />
+    <trace from=".C_FDC > .pin1" to="net.VCC3V3" />
+    <trace from=".C_FDC > .pin2" to="net.GND" />
+
+    {/* Status LED */}
+    <trace from=".U1 > .PC13" to=".R_LED > .pin1" />
+    <trace from=".R_LED > .pin2" to=".LED1 > .anode" />
+    <trace from=".LED1 > .cathode" to="net.GND" />
+  </board>,
+)
+
+// ---- Render and export ----
+
+async function main() {
+  const outDir = path.resolve(__dirname, "../output")
+  fs.mkdirSync(outDir, { recursive: true })
+
+  console.log("Rendering circuit...")
+  circuit.render()
+
+  // 1. Circuit JSON
+  const circuitJson = circuit.getCircuitJson()
+  const jsonPath = path.join(outDir, "stm32-motor-sensor-control.circuit.json")
+  fs.writeFileSync(jsonPath, JSON.stringify(circuitJson, null, 2))
+  console.log(`Circuit JSON: ${jsonPath} (${(fs.statSync(jsonPath).size / 1024).toFixed(0)} KB)`)
+
+  // 2. Schematic SVG
+  try {
+    const schSvg = await circuit.getSvg({ view: "schematic" })
+    const schPath = path.join(outDir, "stm32-motor-sensor-control.schematic.svg")
+    fs.writeFileSync(schPath, schSvg)
+    console.log(`Schematic SVG: ${schPath} (${(fs.statSync(schPath).size / 1024).toFixed(0)} KB)`)
+  } catch (e: any) {
+    console.error(`Schematic SVG failed: ${e.message}`)
+  }
+
+  // 3. PCB SVG
+  try {
+    const pcbSvg = await circuit.getSvg({ view: "pcb" })
+    const pcbPath = path.join(outDir, "stm32-motor-sensor-control.pcb.svg")
+    fs.writeFileSync(pcbPath, pcbSvg)
+    console.log(`PCB SVG: ${pcbPath} (${(fs.statSync(pcbPath).size / 1024).toFixed(0)} KB)`)
+  } catch (e: any) {
+    console.error(`PCB SVG failed: ${e.message}`)
+  }
+
+  // 4. Readable netlist text file
+  const sourcePorts = (circuitJson as any[]).filter((e: any) => e.type === "source_port")
+  const sourceComponents = (circuitJson as any[]).filter((e: any) => e.type === "source_component")
+  const sourceNets = (circuitJson as any[]).filter((e: any) => e.type === "source_net")
+  const compById = new Map(sourceComponents.map((c: any) => [c.source_component_id, c]))
+
+  const netConnections: Map<string, Set<string>> = new Map()
+  for (const port of sourcePorts) {
+    const key = port.subcircuit_connectivity_map_key
+    if (key) {
+      const comp = compById.get(port.source_component_id)
+      const compName = comp?.name || "?"
+      const pinName = port.name || port.port_hints?.[0] || "?"
+      if (!netConnections.has(key)) netConnections.set(key, new Set())
+      netConnections.get(key)!.add(`${compName}.${pinName}`)
+    }
+  }
+
+  const netNameMap: Map<string, string> = new Map()
+  for (const net of sourceNets) {
+    const key = net.subcircuit_connectivity_map_key
+    if (key && net.name) netNameMap.set(key, net.name)
+  }
+
+  let netlistText = "STM32 Motor & Sensor Control Circuit - Netlist\n"
+  netlistText += "=".repeat(60) + "\n\n"
+  netlistText += `Components: ${sourceComponents.length}\n`
+  netlistText += `Ports: ${sourcePorts.length}\n`
+  netlistText += `Named Nets: ${sourceNets.length}\n\n`
+
+  netlistText += "COMPONENTS:\n"
+  netlistText += "-".repeat(40) + "\n"
+  for (const comp of sourceComponents) {
+    const ports = sourcePorts.filter((p: any) => p.source_component_id === comp.source_component_id)
+    netlistText += `  ${comp.name} (${ports.length} pins)\n`
+  }
+
+  netlistText += "\nNETLIST:\n"
+  netlistText += "-".repeat(40) + "\n"
+
+  const sortedNets = [...netConnections.entries()]
+    .filter(([_, pins]) => pins.size > 1)
+    .sort(([a], [b]) => {
+      const nameA = netNameMap.get(a) || a
+      const nameB = netNameMap.get(b) || b
+      return nameA.localeCompare(nameB)
+    })
+
+  for (const [key, pins] of sortedNets) {
+    const netName = netNameMap.get(key) || `signal_${key.slice(0, 12)}`
+    netlistText += `\n  NET: ${netName}\n`
+    for (const pin of [...pins].sort()) {
+      netlistText += `    - ${pin}\n`
+    }
+  }
+
+  const netlistPath = path.join(outDir, "stm32-motor-sensor-control.netlist.txt")
+  fs.writeFileSync(netlistPath, netlistText)
+  console.log(`Netlist: ${netlistPath}`)
+
+  console.log("\nDone! All files in output/")
+}
+
+main().catch(console.error)

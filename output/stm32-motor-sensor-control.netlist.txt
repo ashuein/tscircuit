@@ -1,0 +1,318 @@
+STM32 Motor & Sensor Control Circuit - Netlist
+============================================================
+
+Components: 38
+Ports: 221
+Named Nets: 24
+
+COMPONENTS:
+----------------------------------------
+  U1 (48 pins)
+  DRV1 (16 pins)
+  DRV2 (16 pins)
+  DRV3 (16 pins)
+  DRV4 (16 pins)
+  MOT1 (4 pins)
+  MOT2 (4 pins)
+  MOT3 (4 pins)
+  MOT4 (4 pins)
+  SERVO1 (3 pins)
+  SERVO2 (3 pins)
+  U3 (24 pins)
+  U4 (10 pins)
+  U2 (3 pins)
+  J_USB (4 pins)
+  Y1 (2 pins)
+  C_Y1 (2 pins)
+  C_Y2 (2 pins)
+  C1 (2 pins)
+  C2 (2 pins)
+  C3 (2 pins)
+  C_IMU1 (2 pins)
+  C_IMU2 (2 pins)
+  C_FDC (2 pins)
+  C_DRV1 (2 pins)
+  C_DRV2 (2 pins)
+  C_DRV3 (2 pins)
+  C_DRV4 (2 pins)
+  C_MOT1 (2 pins)
+  C_MOT2 (2 pins)
+  C_MOT3 (2 pins)
+  C_MOT4 (2 pins)
+  C_LDO_IN (2 pins)
+  C_LDO_OUT (2 pins)
+  R_SCL (2 pins)
+  R_SDA (2 pins)
+  R_LED (2 pins)
+  LED1 (2 pins)
+
+NETLIST:
+----------------------------------------
+
+  NET: GND
+    - C1.pin2
+    - C2.pin2
+    - C3.pin2
+    - C_DRV1.pin2
+    - C_DRV2.pin2
+    - C_DRV3.pin2
+    - C_DRV4.pin2
+    - C_FDC.pin2
+    - C_IMU1.pin2
+    - C_IMU2.pin2
+    - C_LDO_IN.pin2
+    - C_LDO_OUT.pin2
+    - C_MOT1.pin2
+    - C_MOT2.pin2
+    - C_MOT3.pin2
+    - C_MOT4.pin2
+    - C_Y1.pin2
+    - C_Y2.pin2
+    - DRV1.GND
+    - DRV1.GND_MOT
+    - DRV1.MS2
+    - DRV1.MS3
+    - DRV2.GND
+    - DRV2.GND_MOT
+    - DRV2.MS1
+    - DRV2.MS2
+    - DRV2.MS3
+    - DRV3.GND
+    - DRV3.GND_MOT
+    - DRV3.MS1
+    - DRV3.MS2
+    - DRV3.MS3
+    - DRV4.GND
+    - DRV4.GND_MOT
+    - DRV4.MS1
+    - DRV4.MS2
+    - DRV4.MS3
+    - J_USB.GND
+    - LED1.pin2
+    - SERVO1.GND
+    - SERVO2.GND
+    - U1.VSS1
+    - U1.VSS2
+    - U1.VSSA
+    - U2.GND
+    - U3.AD0
+    - U3.GND
+    - U4.ADDR
+    - U4.GND
+
+  NET: I2C_SCL
+    - R_SCL.pin2
+    - U1.PB6
+    - U3.SCL
+    - U4.SCL
+
+  NET: I2C_SDA
+    - R_SDA.pin2
+    - U1.PB7
+    - U3.SDA
+    - U4.SDA
+
+  NET: signal_unnamedsubci
+    - DRV1.MS1
+    - U1.PB4
+
+  NET: signal_unnamedsubci
+    - DRV1.1A
+    - MOT1.1A
+
+  NET: signal_unnamedsubci
+    - DRV1.1B
+    - MOT1.1B
+
+  NET: signal_unnamedsubci
+    - DRV1.2A
+    - MOT1.2A
+
+  NET: signal_unnamedsubci
+    - DRV1.2B
+    - MOT1.2B
+
+  NET: signal_unnamedsubci
+    - DRV2.STEP
+    - U1.PA2
+
+  NET: signal_unnamedsubci
+    - DRV2.DIR
+    - U1.PA3
+
+  NET: signal_unnamedsubci
+    - DRV2.EN
+    - U1.PB1
+
+  NET: signal_unnamedsubci
+    - DRV2.1A
+    - MOT2.1A
+
+  NET: signal_unnamedsubci
+    - DRV2.1B
+    - MOT2.1B
+
+  NET: signal_unnamedsubci
+    - DRV2.2A
+    - MOT2.2A
+
+  NET: signal_unnamedsubci
+    - DRV2.2B
+    - MOT2.2B
+
+  NET: signal_unnamedsubci
+    - DRV3.STEP
+    - U1.PA8
+
+  NET: signal_unnamedsubci
+    - DRV3.DIR
+    - U1.PA9
+
+  NET: signal_unnamedsubci
+    - DRV3.EN
+    - U1.PB2
+
+  NET: signal_unnamedsubci
+    - DRV3.1A
+    - MOT3.1A
+
+  NET: signal_unnamedsubci
+    - DRV3.1B
+    - MOT3.1B
+
+  NET: signal_unnamedsubci
+    - DRV3.2A
+    - MOT3.2A
+
+  NET: signal_unnamedsubci
+    - DRV3.2B
+    - MOT3.2B
+
+  NET: signal_unnamedsubci
+    - C_Y1.pin1
+    - U1.PD0
+    - Y1.pin1
+
+  NET: signal_unnamedsubci
+    - DRV4.STEP
+    - U1.PA10
+
+  NET: signal_unnamedsubci
+    - DRV4.DIR
+    - U1.PA4
+
+  NET: signal_unnamedsubci
+    - DRV4.EN
+    - U1.PB3
+
+  NET: signal_unnamedsubci
+    - DRV4.1A
+    - MOT4.1A
+
+  NET: signal_unnamedsubci
+    - DRV4.1B
+    - MOT4.1B
+
+  NET: signal_unnamedsubci
+    - DRV4.2A
+    - MOT4.2A
+
+  NET: signal_unnamedsubci
+    - DRV4.2B
+    - MOT4.2B
+
+  NET: signal_unnamedsubci
+    - SERVO1.SIG
+    - U1.PA6
+
+  NET: signal_unnamedsubci
+    - SERVO2.SIG
+    - U1.PA7
+
+  NET: signal_unnamedsubci
+    - C_Y2.pin1
+    - U1.PD1
+    - Y1.pin2
+
+  NET: signal_unnamedsubci
+    - U1.PB5
+    - U3.INT
+
+  NET: signal_unnamedsubci
+    - R_LED.pin1
+    - U1.PC13
+
+  NET: signal_unnamedsubci
+    - LED1.pin1
+    - R_LED.pin2
+
+  NET: signal_unnamedsubci
+    - J_USB.DM
+    - U1.PA11
+
+  NET: signal_unnamedsubci
+    - J_USB.DP
+    - U1.PA12
+
+  NET: signal_unnamedsubci
+    - DRV1.STEP
+    - U1.PA0
+
+  NET: signal_unnamedsubci
+    - DRV1.DIR
+    - U1.PA1
+
+  NET: signal_unnamedsubci
+    - DRV1.EN
+    - U1.PB0
+
+  NET: VBUS5V
+    - C_LDO_IN.pin1
+    - J_USB.VBUS
+    - SERVO1.VCC
+    - SERVO2.VCC
+    - U2.VIN
+
+  NET: VCC3V3
+    - C1.pin1
+    - C2.pin1
+    - C3.pin1
+    - C_DRV1.pin1
+    - C_DRV2.pin1
+    - C_DRV3.pin1
+    - C_DRV4.pin1
+    - C_FDC.pin1
+    - C_IMU1.pin1
+    - C_IMU2.pin1
+    - C_LDO_OUT.pin1
+    - DRV1.RESET
+    - DRV1.SLEEP
+    - DRV1.VDD
+    - DRV2.RESET
+    - DRV2.SLEEP
+    - DRV2.VDD
+    - DRV3.RESET
+    - DRV3.SLEEP
+    - DRV3.VDD
+    - DRV4.RESET
+    - DRV4.SLEEP
+    - DRV4.VDD
+    - R_SCL.pin1
+    - R_SDA.pin1
+    - U1.VBAT
+    - U1.VDD1
+    - U1.VDD2
+    - U1.VDDA
+    - U2.VOUT
+    - U3.VDD
+    - U4.VDD
+
+  NET: VMOT
+    - C_MOT1.pin1
+    - C_MOT2.pin1
+    - C_MOT3.pin1
+    - C_MOT4.pin1
+    - DRV1.VMOT
+    - DRV2.VMOT
+    - DRV3.VMOT
+    - DRV4.VMOT
