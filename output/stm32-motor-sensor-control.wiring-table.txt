@@ -1,0 +1,461 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║     STM32 MOTOR & SENSOR CONTROL CIRCUIT — COMPLETE WIRING TABLE       ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  BILL OF MATERIALS                                                     │
+├──────────┬────────────────────────┬───────────┬────────────────────────┤
+│ Ref      │ Part                   │ Value     │ Package                │
+├──────────┼────────────────────────┼───────────┼────────────────────────┤
+│ U1       │ STM32F103C8T6          │ --        │ LQFP-48                │
+│ U2       │ AMS1117-3.3            │ 3.3V LDO  │ SOT-223                │
+│ U3       │ MPU6050 IMU            │ --        │ QFN-24                 │
+│ U4       │ FDC1004 Cap Sensor     │ --        │ TSSOP-10               │
+│ DRV1-4   │ A4988 Stepper Driver   │ --        │ SOIC-16 (x4)           │
+│ MOT1-4   │ NEMA17 Connector       │ --        │ 4-pin header (x4)      │
+│ SERVO1-2 │ Servo Connector        │ --        │ 3-pin header (x2)      │
+│ J_USB    │ USB Connector          │ --        │ 4-pin header           │
+│ Y1       │ Crystal Oscillator     │ 8MHz      │ HC49                   │
+│ C_Y1,Y2  │ Crystal Load Cap       │ 20pF      │ 0402 (x2)              │
+│ C1-C3    │ STM32 Decoupling       │ 100nF     │ 0402 (x3)              │
+│ C_DRV1-4 │ Driver Decoupling      │ 100nF     │ 0402 (x4)              │
+│ C_MOT1-4 │ Motor Bulk Cap         │ 100uF     │ 0805 (x4)              │
+│ C_IMU1   │ IMU Decoupling         │ 100nF     │ 0402                   │
+│ C_IMU2   │ IMU Decoupling         │ 10nF      │ 0402                   │
+│ C_FDC    │ FDC Decoupling         │ 100nF     │ 0402                   │
+│ C_LDO_IN │ LDO Input Cap          │ 10uF      │ 0805                   │
+│ C_LDO_OUT │ LDO Output Cap         │ 10uF      │ 0805                   │
+│ R_SCL    │ I2C Pull-up            │ 4.7k      │ 0402                   │
+│ R_SDA    │ I2C Pull-up            │ 4.7k      │ 0402                   │
+│ R_LED    │ LED Resistor           │ 1k        │ 0402                   │
+│ LED1     │ Status LED             │ --        │ 0603                   │
+└──────────┴────────────────────────┴───────────┴────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  STM32F103C8T6 PIN ALLOCATION                                          │
+├──────┬───────┬──────────────────────────────────────────────────────────┤
+│ Pin# │ Name  │ Connected To                                             │
+├──────┼───────┼──────────────────────────────────────────────────────────┤
+│    1 │ VBAT  │ VCC3V3 (3.3V rail)                                       │
+│    2 │ PC13  │ R_LED.pin1 → LED1 (Status LED)                           │
+│    3 │ PC14  │ (unused)                                                 │
+│    4 │ PC15  │ (unused)                                                 │
+│    5 │ PD0   │ Y1.pin1 + C_Y1.pin1 (OSC_IN, 8MHz crystal)               │
+│    6 │ PD1   │ Y1.pin2 + C_Y2.pin1 (OSC_OUT, 8MHz crystal)              │
+│    7 │ NRST  │ (reset, leave unconnected or add RC)                     │
+│    8 │ VSSA  │ GND                                                      │
+│    9 │ VDDA  │ VCC3V3 + C3 decoupling                                   │
+│   10 │ PA0   │ DRV1.STEP (Stepper 1 step)                               │
+│   11 │ PA1   │ DRV1.DIR  (Stepper 1 direction)                          │
+│   12 │ PA2   │ DRV2.STEP (Stepper 2 step)                               │
+│   13 │ PA3   │ DRV2.DIR  (Stepper 2 direction)                          │
+│   14 │ PA4   │ DRV4.DIR  (Stepper 4 direction)                          │
+│   15 │ PA5   │ (unused)                                                 │
+│   16 │ PA6   │ SERVO1.SIG (Servo 1 PWM, TIM3_CH1)                       │
+│   17 │ PA7   │ SERVO2.SIG (Servo 2 PWM, TIM3_CH2)                       │
+│   18 │ PB0   │ DRV1.EN   (Stepper 1 enable)                             │
+│   19 │ PB1   │ DRV2.EN   (Stepper 2 enable)                             │
+│   20 │ PB2   │ DRV3.EN   (Stepper 3 enable)                             │
+│   21 │ PB10  │ (unused)                                                 │
+│   22 │ PB11  │ (unused)                                                 │
+│   23 │ VSS1  │ GND                                                      │
+│   24 │ VDD1  │ VCC3V3 + C1 decoupling                                   │
+│   25 │ PB12  │ (unused)                                                 │
+│   26 │ PB13  │ (unused)                                                 │
+│   27 │ PB14  │ (unused)                                                 │
+│   28 │ PB15  │ (unused)                                                 │
+│   29 │ PA8   │ DRV3.STEP (Stepper 3 step)                               │
+│   30 │ PA9   │ DRV3.DIR  (Stepper 3 direction)                          │
+│   31 │ PA10  │ DRV4.STEP (Stepper 4 step)                               │
+│   32 │ PA11  │ J_USB.DM  (USB D-)                                       │
+│   33 │ PA12  │ J_USB.DP  (USB D+)                                       │
+│   34 │ PA13  │ SWDIO (debug, leave free)                                │
+│   35 │ PA14  │ SWCLK (debug, leave free)                                │
+│   36 │ PA15  │ (unused)                                                 │
+│   37 │ PB3   │ DRV4.EN   (Stepper 4 enable)                             │
+│   38 │ PB4   │ DRV1.MS1  (Stepper 1 microstep select)                   │
+│   39 │ PB5   │ U3.INT    (MPU6050 interrupt)                            │
+│   40 │ PB6   │ I2C_SCL → U3.SCL + U4.SCL + R_SCL (I2C clock)            │
+│   41 │ PB7   │ I2C_SDA → U3.SDA + U4.SDA + R_SDA (I2C data)             │
+│   42 │ PB8   │ (unused)                                                 │
+│   43 │ PB9   │ (unused)                                                 │
+│   44 │ BOOT0 │ (tie low for normal boot)                                │
+│   47 │ VSS2  │ GND                                                      │
+│   48 │ VDD2  │ VCC3V3 + C2 decoupling                                   │
+└──────┴───────┴──────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  A4988 STEPPER DRIVER WIRING (x4)                                      │
+├──────────┬──────────┬──────────┬──────────┬────────────────────────────┤
+│ A4988 Pin│ DRV1     │ DRV2     │ DRV3     │ DRV4                       │
+├──────────┼──────────┼──────────┼──────────┼────────────────────────────┤
+│ STEP     │ U1.PA0   │ U1.PA2   │ U1.PA8   │ U1.PA10                    │
+│ DIR      │ U1.PA1   │ U1.PA3   │ U1.PA9   │ U1.PA4                     │
+│ EN       │ U1.PB0   │ U1.PB1   │ U1.PB2   │ U1.PB3                     │
+│ MS1      │ U1.PB4   │ GND      │ GND      │ GND                        │
+│ MS2      │ GND      │ GND      │ GND      │ GND                        │
+│ MS3      │ GND      │ GND      │ GND      │ GND                        │
+│ SLEEP    │ VCC3V3   │ VCC3V3   │ VCC3V3   │ VCC3V3                     │
+│ RESET    │ VCC3V3   │ VCC3V3   │ VCC3V3   │ VCC3V3                     │
+│ VDD      │ VCC3V3   │ VCC3V3   │ VCC3V3   │ VCC3V3                     │
+│ GND      │ GND      │ GND      │ GND      │ GND                        │
+│ VMOT     │ VMOT     │ VMOT     │ VMOT     │ VMOT                       │
+│ GND_MOT  │ GND      │ GND      │ GND      │ GND                        │
+│ 1A       │ MOT1.1A  │ MOT2.1A  │ MOT3.1A  │ MOT4.1A                    │
+│ 1B       │ MOT1.1B  │ MOT2.1B  │ MOT3.1B  │ MOT4.1B                    │
+│ 2A       │ MOT1.2A  │ MOT2.2A  │ MOT3.2A  │ MOT4.2A                    │
+│ 2B       │ MOT1.2B  │ MOT2.2B  │ MOT3.2B  │ MOT4.2B                    │
+├──────────┴──────────┴──────────┴──────────┴────────────────────────────┤
+│ Each driver also needs: 100nF cap (VDD→GND), 100uF cap (VMOT→GND)     │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  I2C BUS WIRING                                                        │
+├──────────────┬─────────────────────────────────────────────────────────┤
+│ Signal       │ Connected Pins                                          │
+├──────────────┼─────────────────────────────────────────────────────────┤
+│ I2C_SCL      │ U1.PB6, U3(MPU6050).SCL, U4(FDC1004).SCL, R_SCL→3.3V │
+│ I2C_SDA      │ U1.PB7, U3(MPU6050).SDA, U4(FDC1004).SDA, R_SDA→3.3V │
+│ IMU INT      │ U3(MPU6050).INT → U1.PB5                               │
+│ MPU6050 AD0  │ GND (I2C address 0x68)                                 │
+│ FDC1004 ADDR │ GND (I2C address 0x50)                                 │
+├──────────────┴─────────────────────────────────────────────────────────┤
+│ Pull-ups: R_SCL=4.7k (VCC3V3→SCL), R_SDA=4.7k (VCC3V3→SDA)          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  SERVO MOTOR WIRING                                                    │
+├──────────┬────────────┬────────────────────────────────────────────────┤
+│ Servo    │ Pin        │ Connected To                                   │
+├──────────┼────────────┼────────────────────────────────────────────────┤
+│ SERVO1   │ SIG        │ U1.PA6  (TIM3_CH1 PWM)                        │
+│          │ VCC        │ VBUS5V  (5V from USB)                          │
+│          │ GND        │ GND                                            │
+├──────────┼────────────┼────────────────────────────────────────────────┤
+│ SERVO2   │ SIG        │ U1.PA7  (TIM3_CH2 PWM)                        │
+│          │ VCC        │ VBUS5V  (5V from USB)                          │
+│          │ GND        │ GND                                            │
+└──────────┴────────────┴────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  POWER DISTRIBUTION                                                    │
+├──────────┬────────────────────────────────────────────────────────────┤
+│ Rail     │ Source / Loads                                              │
+├──────────┼────────────────────────────────────────────────────────────┤
+│ VBUS5V   │ FROM: J_USB.VBUS (laptop USB)                              │
+│ (5V)     │   TO: U2(AMS1117).VIN, SERVO1.VCC, SERVO2.VCC             │
+│          │   CAPS: C_LDO_IN (10uF)                                    │
+├──────────┼────────────────────────────────────────────────────────────┤
+│ VCC3V3   │ FROM: U2(AMS1117).VOUT                                     │
+│ (3.3V)   │   TO: U1(STM32) VDD1+VDD2+VDDA+VBAT                       │
+│          │       DRV1-4 .VDD+.SLEEP+.RESET                            │
+│          │       U3(MPU6050).VDD, U4(FDC1004).VDD                     │
+│          │       R_SCL.pin1, R_SDA.pin1 (I2C pull-ups)                │
+│          │   CAPS: C1,C2,C3 (100nF), C_LDO_OUT (10uF),               │
+│          │         C_DRV1-4 (100nF), C_IMU1 (100nF),                  │
+│          │         C_IMU2 (10nF), C_FDC (100nF)                       │
+├──────────┼────────────────────────────────────────────────────────────┤
+│ VMOT     │ FROM: External motor power supply (12-36V)                  │
+│ (12-36V) │   TO: DRV1-4 .VMOT                                         │
+│          │   CAPS: C_MOT1-4 (100uF each)                              │
+├──────────┼────────────────────────────────────────────────────────────┤
+│ GND      │ All component grounds tied together                         │
+│          │ 49 pins total on GND rail                                   │
+└──────────┴────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  CRYSTAL OSCILLATOR                                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Y1 (8MHz HC49):  pin1 → U1.PD0 (OSC_IN)                               │
+│                  pin2 → U1.PD1 (OSC_OUT)                               │
+│ C_Y1 (20pF):    pin1 → Y1.pin1,  pin2 → GND                           │
+│ C_Y2 (20pF):    pin1 → Y1.pin2,  pin2 → GND                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  USB CONNECTION (Laptop Communication)                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│ J_USB.VBUS → VBUS5V (5V rail)                                          │
+│ J_USB.GND  → GND                                                       │
+│ J_USB.DM   → U1.PA11 (USB D-)                                          │
+│ J_USB.DP   → U1.PA12 (USB D+)                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  STATUS LED                                                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│ U1.PC13 → R_LED(1k).pin1 → R_LED.pin2 → LED1.anode → LED1.cathode → GND│
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  FULL NETLIST (every net, every pin)                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  NET DRV1_1A__MOT1_1A:
+    ─── DRV1.1A
+    ─── MOT1.1A
+
+  NET DRV1_1B__MOT1_1B:
+    ─── DRV1.1B
+    ─── MOT1.1B
+
+  NET DRV1_2A__MOT1_2A:
+    ─── DRV1.2A
+    ─── MOT1.2A
+
+  NET DRV1_2B__MOT1_2B:
+    ─── DRV1.2B
+    ─── MOT1.2B
+
+  NET DRV2_1A__MOT2_1A:
+    ─── DRV2.1A
+    ─── MOT2.1A
+
+  NET DRV2_1B__MOT2_1B:
+    ─── DRV2.1B
+    ─── MOT2.1B
+
+  NET DRV2_2A__MOT2_2A:
+    ─── DRV2.2A
+    ─── MOT2.2A
+
+  NET DRV2_2B__MOT2_2B:
+    ─── DRV2.2B
+    ─── MOT2.2B
+
+  NET DRV3_1A__MOT3_1A:
+    ─── DRV3.1A
+    ─── MOT3.1A
+
+  NET DRV3_1B__MOT3_1B:
+    ─── DRV3.1B
+    ─── MOT3.1B
+
+  NET DRV3_2A__MOT3_2A:
+    ─── DRV3.2A
+    ─── MOT3.2A
+
+  NET DRV3_2B__MOT3_2B:
+    ─── DRV3.2B
+    ─── MOT3.2B
+
+  NET DRV4_1A__MOT4_1A:
+    ─── DRV4.1A
+    ─── MOT4.1A
+
+  NET DRV4_1B__MOT4_1B:
+    ─── DRV4.1B
+    ─── MOT4.1B
+
+  NET DRV4_2A__MOT4_2A:
+    ─── DRV4.2A
+    ─── MOT4.2A
+
+  NET DRV4_2B__MOT4_2B:
+    ─── DRV4.2B
+    ─── MOT4.2B
+
+  NET GND:
+    ─── C1.pin2
+    ─── C2.pin2
+    ─── C3.pin2
+    ─── C_DRV1.pin2
+    ─── C_DRV2.pin2
+    ─── C_DRV3.pin2
+    ─── C_DRV4.pin2
+    ─── C_FDC.pin2
+    ─── C_IMU1.pin2
+    ─── C_IMU2.pin2
+    ─── C_LDO_IN.pin2
+    ─── C_LDO_OUT.pin2
+    ─── C_MOT1.pin2
+    ─── C_MOT2.pin2
+    ─── C_MOT3.pin2
+    ─── C_MOT4.pin2
+    ─── C_Y1.pin2
+    ─── C_Y2.pin2
+    ─── DRV1.GND
+    ─── DRV1.GND_MOT
+    ─── DRV1.MS2
+    ─── DRV1.MS3
+    ─── DRV2.GND
+    ─── DRV2.GND_MOT
+    ─── DRV2.MS1
+    ─── DRV2.MS2
+    ─── DRV2.MS3
+    ─── DRV3.GND
+    ─── DRV3.GND_MOT
+    ─── DRV3.MS1
+    ─── DRV3.MS2
+    ─── DRV3.MS3
+    ─── DRV4.GND
+    ─── DRV4.GND_MOT
+    ─── DRV4.MS1
+    ─── DRV4.MS2
+    ─── DRV4.MS3
+    ─── J_USB.GND
+    ─── LED1.pin2
+    ─── SERVO1.GND
+    ─── SERVO2.GND
+    ─── U1.VSS1
+    ─── U1.VSS2
+    ─── U1.VSSA
+    ─── U2.GND
+    ─── U3.AD0
+    ─── U3.GND
+    ─── U4.ADDR
+    ─── U4.GND
+
+  NET I2C_SCL:
+    ─── R_SCL.pin2
+    ─── U1.PB6
+    ─── U3.SCL
+    ─── U4.SCL
+
+  NET I2C_SDA:
+    ─── R_SDA.pin2
+    ─── U1.PB7
+    ─── U3.SDA
+    ─── U4.SDA
+
+  NET NET_U1.PD0_Y1.pin1_C_Y1.pin1:
+    ─── C_Y1.pin1
+    ─── U1.PD0
+    ─── Y1.pin1
+
+  NET NET_U1.PD1_Y1.pin2_C_Y2.pin1:
+    ─── C_Y2.pin1
+    ─── U1.PD1
+    ─── Y1.pin2
+
+  NET R_LED_pin2__LED1_pin1:
+    ─── LED1.pin1
+    ─── R_LED.pin2
+
+  NET U1_PA0__DRV1_STEP:
+    ─── DRV1.STEP
+    ─── U1.PA0
+
+  NET U1_PA1__DRV1_DIR:
+    ─── DRV1.DIR
+    ─── U1.PA1
+
+  NET U1_PA10__DRV4_STEP:
+    ─── DRV4.STEP
+    ─── U1.PA10
+
+  NET U1_PA11__J_USB_DM:
+    ─── J_USB.DM
+    ─── U1.PA11
+
+  NET U1_PA12__J_USB_DP:
+    ─── J_USB.DP
+    ─── U1.PA12
+
+  NET U1_PA2__DRV2_STEP:
+    ─── DRV2.STEP
+    ─── U1.PA2
+
+  NET U1_PA3__DRV2_DIR:
+    ─── DRV2.DIR
+    ─── U1.PA3
+
+  NET U1_PA4__DRV4_DIR:
+    ─── DRV4.DIR
+    ─── U1.PA4
+
+  NET U1_PA6__SERVO1_SIG:
+    ─── SERVO1.SIG
+    ─── U1.PA6
+
+  NET U1_PA7__SERVO2_SIG:
+    ─── SERVO2.SIG
+    ─── U1.PA7
+
+  NET U1_PA8__DRV3_STEP:
+    ─── DRV3.STEP
+    ─── U1.PA8
+
+  NET U1_PA9__DRV3_DIR:
+    ─── DRV3.DIR
+    ─── U1.PA9
+
+  NET U1_PB0__DRV1_EN:
+    ─── DRV1.EN
+    ─── U1.PB0
+
+  NET U1_PB1__DRV2_EN:
+    ─── DRV2.EN
+    ─── U1.PB1
+
+  NET U1_PB2__DRV3_EN:
+    ─── DRV3.EN
+    ─── U1.PB2
+
+  NET U1_PB3__DRV4_EN:
+    ─── DRV4.EN
+    ─── U1.PB3
+
+  NET U1_PB4__DRV1_MS1:
+    ─── DRV1.MS1
+    ─── U1.PB4
+
+  NET U1_PB5__U3_INT:
+    ─── U1.PB5
+    ─── U3.INT
+
+  NET U1_PC13__R_LED_pin1:
+    ─── R_LED.pin1
+    ─── U1.PC13
+
+  NET VBUS5V:
+    ─── C_LDO_IN.pin1
+    ─── J_USB.VBUS
+    ─── SERVO1.VCC
+    ─── SERVO2.VCC
+    ─── U2.VIN
+
+  NET VCC3V3:
+    ─── C1.pin1
+    ─── C2.pin1
+    ─── C3.pin1
+    ─── C_DRV1.pin1
+    ─── C_DRV2.pin1
+    ─── C_DRV3.pin1
+    ─── C_DRV4.pin1
+    ─── C_FDC.pin1
+    ─── C_IMU1.pin1
+    ─── C_IMU2.pin1
+    ─── C_LDO_OUT.pin1
+    ─── DRV1.RESET
+    ─── DRV1.SLEEP
+    ─── DRV1.VDD
+    ─── DRV2.RESET
+    ─── DRV2.SLEEP
+    ─── DRV2.VDD
+    ─── DRV3.RESET
+    ─── DRV3.SLEEP
+    ─── DRV3.VDD
+    ─── DRV4.RESET
+    ─── DRV4.SLEEP
+    ─── DRV4.VDD
+    ─── R_SCL.pin1
+    ─── R_SDA.pin1
+    ─── U1.VBAT
+    ─── U1.VDD1
+    ─── U1.VDD2
+    ─── U1.VDDA
+    ─── U2.VOUT
+    ─── U3.VDD
+    ─── U4.VDD
+
+  NET VMOT:
+    ─── C_MOT1.pin1
+    ─── C_MOT2.pin1
+    ─── C_MOT3.pin1
+    ─── C_MOT4.pin1
+    ─── DRV1.VMOT
+    ─── DRV2.VMOT
+    ─── DRV3.VMOT
+    ─── DRV4.VMOT
+

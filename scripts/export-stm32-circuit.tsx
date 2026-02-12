@@ -374,93 +374,340 @@ async function main() {
   console.log("Rendering circuit...")
   circuit.render()
 
-  // 1. Circuit JSON
-  const circuitJson = circuit.getCircuitJson()
+  const circuitJson = circuit.getCircuitJson() as any[]
+
+  // ---- Build connectivity data ----
+  const sourcePorts = circuitJson.filter((e) => e.type === "source_port")
+  const sourceComponents = circuitJson.filter((e) => e.type === "source_component")
+  const sourceNets = circuitJson.filter((e) => e.type === "source_net")
+  const compById = new Map(sourceComponents.map((c: any) => [c.source_component_id, c]))
+
+  // Map connectivity keys to net names
+  const netNameByKey: Map<string, string> = new Map()
+  for (const net of sourceNets) {
+    if (net.subcircuit_connectivity_map_key && net.name) {
+      netNameByKey.set(net.subcircuit_connectivity_map_key, net.name)
+    }
+  }
+
+  // Group ports by connectivity key -> list of {component, pin}
+  const netConnections: Map<string, Array<{ comp: string; pin: string }>> = new Map()
+  for (const port of sourcePorts) {
+    const key = port.subcircuit_connectivity_map_key
+    if (!key) continue
+    const comp = compById.get(port.source_component_id)
+    const compName = comp?.name || "?"
+    const pinName = port.name || port.port_hints?.[0] || "?"
+    if (!netConnections.has(key)) netConnections.set(key, [])
+    netConnections.get(key)!.push({ comp: compName, pin: pinName })
+  }
+
+  // Assign readable net names to unnamed signals
+  let signalCounter = 1
+  const getNetName = (key: string): string => {
+    if (netNameByKey.has(key)) return netNameByKey.get(key)!
+    // Try to derive a name from connected pins
+    const pins = netConnections.get(key)
+    if (pins && pins.length === 2) {
+      return `${pins[0].comp}_${pins[0].pin}__${pins[1].comp}_${pins[1].pin}`
+    }
+    if (pins && pins.length > 2) {
+      return `NET_${pins.map((p) => `${p.comp}.${p.pin}`).join("_")}`
+    }
+    return `SIG${signalCounter++}`
+  }
+
+  // Build final net name map
+  const finalNetNames: Map<string, string> = new Map()
+  for (const [key] of netConnections) {
+    finalNetNames.set(key, getNetName(key))
+  }
+
+  // Build port -> net name lookup
+  const portNetName: Map<string, string> = new Map()
+  for (const port of sourcePorts) {
+    const key = port.subcircuit_connectivity_map_key
+    if (key && finalNetNames.has(key)) {
+      const comp = compById.get(port.source_component_id)
+      const compName = comp?.name || "?"
+      const pinName = port.name || port.port_hints?.[0] || "?"
+      portNetName.set(`${compName}.${pinName}`, finalNetNames.get(key)!)
+    }
+  }
+
+  // ================================================================
+  // 1. SPICE NETLIST
+  // ================================================================
+  try {
+    const { circuitJsonToSpice } = await import("circuit-json-to-spice")
+    const spiceNetlist = circuitJsonToSpice(circuitJson)
+    const spiceStr = spiceNetlist.toSpiceString()
+    const spicePath = path.join(outDir, "stm32-motor-sensor-control.spice")
+    fs.writeFileSync(spicePath, spiceStr)
+    console.log(`SPICE netlist: ${spicePath} (${spiceStr.length} chars)`)
+  } catch (e: any) {
+    console.log(`SPICE export note: ${e.message}`)
+    console.log("  (SPICE only handles R/C/L/D/transistor -- ICs are exported as subcircuits or skipped)")
+  }
+
+  // ================================================================
+  // 2. CIRCUIT JSON (machine-readable, full data)
+  // ================================================================
   const jsonPath = path.join(outDir, "stm32-motor-sensor-control.circuit.json")
   fs.writeFileSync(jsonPath, JSON.stringify(circuitJson, null, 2))
   console.log(`Circuit JSON: ${jsonPath} (${(fs.statSync(jsonPath).size / 1024).toFixed(0)} KB)`)
 
-  // 2. Schematic SVG
-  try {
-    const schSvg = await circuit.getSvg({ view: "schematic" })
-    const schPath = path.join(outDir, "stm32-motor-sensor-control.schematic.svg")
-    fs.writeFileSync(schPath, schSvg)
-    console.log(`Schematic SVG: ${schPath} (${(fs.statSync(schPath).size / 1024).toFixed(0)} KB)`)
-  } catch (e: any) {
-    console.error(`Schematic SVG failed: ${e.message}`)
+  // ================================================================
+  // 3. COMPLETE WIRING TABLE (what you actually need for Proteus)
+  // ================================================================
+  let out = ""
+  out += "╔══════════════════════════════════════════════════════════════════════════╗\n"
+  out += "║     STM32 MOTOR & SENSOR CONTROL CIRCUIT — COMPLETE WIRING TABLE       ║\n"
+  out += "╚══════════════════════════════════════════════════════════════════════════╝\n\n"
+
+  // ---- Bill of Materials ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  BILL OF MATERIALS                                                     │\n"
+  out += "├──────────┬────────────────────────┬───────────┬────────────────────────┤\n"
+  out += "│ Ref      │ Part                   │ Value     │ Package                │\n"
+  out += "├──────────┼────────────────────────┼───────────┼────────────────────────┤\n"
+
+  const bomEntries = [
+    ["U1",      "STM32F103C8T6",        "--",       "LQFP-48"],
+    ["U2",      "AMS1117-3.3",          "3.3V LDO", "SOT-223"],
+    ["U3",      "MPU6050 IMU",          "--",       "QFN-24"],
+    ["U4",      "FDC1004 Cap Sensor",   "--",       "TSSOP-10"],
+    ["DRV1-4",  "A4988 Stepper Driver", "--",       "SOIC-16 (x4)"],
+    ["MOT1-4",  "NEMA17 Connector",     "--",       "4-pin header (x4)"],
+    ["SERVO1-2","Servo Connector",      "--",       "3-pin header (x2)"],
+    ["J_USB",   "USB Connector",        "--",       "4-pin header"],
+    ["Y1",      "Crystal Oscillator",   "8MHz",     "HC49"],
+    ["C_Y1,Y2", "Crystal Load Cap",     "20pF",     "0402 (x2)"],
+    ["C1-C3",   "STM32 Decoupling",     "100nF",    "0402 (x3)"],
+    ["C_DRV1-4","Driver Decoupling",    "100nF",    "0402 (x4)"],
+    ["C_MOT1-4","Motor Bulk Cap",       "100uF",    "0805 (x4)"],
+    ["C_IMU1",  "IMU Decoupling",       "100nF",    "0402"],
+    ["C_IMU2",  "IMU Decoupling",       "10nF",     "0402"],
+    ["C_FDC",   "FDC Decoupling",       "100nF",    "0402"],
+    ["C_LDO_IN","LDO Input Cap",        "10uF",     "0805"],
+    ["C_LDO_OUT","LDO Output Cap",      "10uF",     "0805"],
+    ["R_SCL",   "I2C Pull-up",          "4.7k",     "0402"],
+    ["R_SDA",   "I2C Pull-up",          "4.7k",     "0402"],
+    ["R_LED",   "LED Resistor",         "1k",       "0402"],
+    ["LED1",    "Status LED",           "--",       "0603"],
+  ]
+  for (const [ref, part, val, pkg] of bomEntries) {
+    out += `│ ${ref.padEnd(8)} │ ${part.padEnd(22)} │ ${val.padEnd(9)} │ ${pkg.padEnd(22)} │\n`
   }
+  out += "└──────────┴────────────────────────┴───────────┴────────────────────────┘\n\n"
 
-  // 3. PCB SVG
-  try {
-    const pcbSvg = await circuit.getSvg({ view: "pcb" })
-    const pcbPath = path.join(outDir, "stm32-motor-sensor-control.pcb.svg")
-    fs.writeFileSync(pcbPath, pcbSvg)
-    console.log(`PCB SVG: ${pcbPath} (${(fs.statSync(pcbPath).size / 1024).toFixed(0)} KB)`)
-  } catch (e: any) {
-    console.error(`PCB SVG failed: ${e.message}`)
+  // ---- STM32 Pin Allocation ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  STM32F103C8T6 PIN ALLOCATION                                          │\n"
+  out += "├──────┬───────┬──────────────────────────────────────────────────────────┤\n"
+  out += "│ Pin# │ Name  │ Connected To                                             │\n"
+  out += "├──────┼───────┼──────────────────────────────────────────────────────────┤\n"
+
+  const stm32Connections: Array<[number, string, string]> = [
+    [1,  "VBAT",  "VCC3V3 (3.3V rail)"],
+    [2,  "PC13",  "R_LED.pin1 → LED1 (Status LED)"],
+    [3,  "PC14",  "(unused)"],
+    [4,  "PC15",  "(unused)"],
+    [5,  "PD0",   "Y1.pin1 + C_Y1.pin1 (OSC_IN, 8MHz crystal)"],
+    [6,  "PD1",   "Y1.pin2 + C_Y2.pin1 (OSC_OUT, 8MHz crystal)"],
+    [7,  "NRST",  "(reset, leave unconnected or add RC)"],
+    [8,  "VSSA",  "GND"],
+    [9,  "VDDA",  "VCC3V3 + C3 decoupling"],
+    [10, "PA0",   "DRV1.STEP (Stepper 1 step)"],
+    [11, "PA1",   "DRV1.DIR  (Stepper 1 direction)"],
+    [12, "PA2",   "DRV2.STEP (Stepper 2 step)"],
+    [13, "PA3",   "DRV2.DIR  (Stepper 2 direction)"],
+    [14, "PA4",   "DRV4.DIR  (Stepper 4 direction)"],
+    [15, "PA5",   "(unused)"],
+    [16, "PA6",   "SERVO1.SIG (Servo 1 PWM, TIM3_CH1)"],
+    [17, "PA7",   "SERVO2.SIG (Servo 2 PWM, TIM3_CH2)"],
+    [18, "PB0",   "DRV1.EN   (Stepper 1 enable)"],
+    [19, "PB1",   "DRV2.EN   (Stepper 2 enable)"],
+    [20, "PB2",   "DRV3.EN   (Stepper 3 enable)"],
+    [21, "PB10",  "(unused)"],
+    [22, "PB11",  "(unused)"],
+    [23, "VSS1",  "GND"],
+    [24, "VDD1",  "VCC3V3 + C1 decoupling"],
+    [25, "PB12",  "(unused)"],
+    [26, "PB13",  "(unused)"],
+    [27, "PB14",  "(unused)"],
+    [28, "PB15",  "(unused)"],
+    [29, "PA8",   "DRV3.STEP (Stepper 3 step)"],
+    [30, "PA9",   "DRV3.DIR  (Stepper 3 direction)"],
+    [31, "PA10",  "DRV4.STEP (Stepper 4 step)"],
+    [32, "PA11",  "J_USB.DM  (USB D-)"],
+    [33, "PA12",  "J_USB.DP  (USB D+)"],
+    [34, "PA13",  "SWDIO (debug, leave free)"],
+    [35, "PA14",  "SWCLK (debug, leave free)"],
+    [36, "PA15",  "(unused)"],
+    [37, "PB3",   "DRV4.EN   (Stepper 4 enable)"],
+    [38, "PB4",   "DRV1.MS1  (Stepper 1 microstep select)"],
+    [39, "PB5",   "U3.INT    (MPU6050 interrupt)"],
+    [40, "PB6",   "I2C_SCL → U3.SCL + U4.SCL + R_SCL (I2C clock)"],
+    [41, "PB7",   "I2C_SDA → U3.SDA + U4.SDA + R_SDA (I2C data)"],
+    [42, "PB8",   "(unused)"],
+    [43, "PB9",   "(unused)"],
+    [44, "BOOT0", "(tie low for normal boot)"],
+    [47, "VSS2",  "GND"],
+    [48, "VDD2",  "VCC3V3 + C2 decoupling"],
+  ]
+
+  for (const [pin, name, conn] of stm32Connections) {
+    out += `│ ${String(pin).padStart(4)} │ ${name.padEnd(5)} │ ${conn.padEnd(56)} │\n`
   }
+  out += "└──────┴───────┴──────────────────────────────────────────────────────────┘\n\n"
 
-  // 4. Readable netlist text file
-  const sourcePorts = (circuitJson as any[]).filter((e: any) => e.type === "source_port")
-  const sourceComponents = (circuitJson as any[]).filter((e: any) => e.type === "source_component")
-  const sourceNets = (circuitJson as any[]).filter((e: any) => e.type === "source_net")
-  const compById = new Map(sourceComponents.map((c: any) => [c.source_component_id, c]))
+  // ---- Per-driver wiring ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  A4988 STEPPER DRIVER WIRING (x4)                                      │\n"
+  out += "├──────────┬──────────┬──────────┬──────────┬────────────────────────────┤\n"
+  out += "│ A4988 Pin│ DRV1     │ DRV2     │ DRV3     │ DRV4                       │\n"
+  out += "├──────────┼──────────┼──────────┼──────────┼────────────────────────────┤\n"
 
-  const netConnections: Map<string, Set<string>> = new Map()
-  for (const port of sourcePorts) {
-    const key = port.subcircuit_connectivity_map_key
-    if (key) {
-      const comp = compById.get(port.source_component_id)
-      const compName = comp?.name || "?"
-      const pinName = port.name || port.port_hints?.[0] || "?"
-      if (!netConnections.has(key)) netConnections.set(key, new Set())
-      netConnections.get(key)!.add(`${compName}.${pinName}`)
-    }
+  const drvWiring: Array<[string, string, string, string, string]> = [
+    ["STEP",    "U1.PA0",  "U1.PA2",  "U1.PA8",  "U1.PA10"],
+    ["DIR",     "U1.PA1",  "U1.PA3",  "U1.PA9",  "U1.PA4"],
+    ["EN",      "U1.PB0",  "U1.PB1",  "U1.PB2",  "U1.PB3"],
+    ["MS1",     "U1.PB4",  "GND",     "GND",     "GND"],
+    ["MS2",     "GND",     "GND",     "GND",     "GND"],
+    ["MS3",     "GND",     "GND",     "GND",     "GND"],
+    ["SLEEP",   "VCC3V3",  "VCC3V3",  "VCC3V3",  "VCC3V3"],
+    ["RESET",   "VCC3V3",  "VCC3V3",  "VCC3V3",  "VCC3V3"],
+    ["VDD",     "VCC3V3",  "VCC3V3",  "VCC3V3",  "VCC3V3"],
+    ["GND",     "GND",     "GND",     "GND",     "GND"],
+    ["VMOT",    "VMOT",    "VMOT",    "VMOT",    "VMOT"],
+    ["GND_MOT", "GND",     "GND",     "GND",     "GND"],
+    ["1A",      "MOT1.1A", "MOT2.1A", "MOT3.1A", "MOT4.1A"],
+    ["1B",      "MOT1.1B", "MOT2.1B", "MOT3.1B", "MOT4.1B"],
+    ["2A",      "MOT1.2A", "MOT2.2A", "MOT3.2A", "MOT4.2A"],
+    ["2B",      "MOT1.2B", "MOT2.2B", "MOT3.2B", "MOT4.2B"],
+  ]
+  for (const [pin, d1, d2, d3, d4] of drvWiring) {
+    out += `│ ${pin.padEnd(8)} │ ${d1.padEnd(8)} │ ${d2.padEnd(8)} │ ${d3.padEnd(8)} │ ${d4.padEnd(26)} │\n`
   }
+  out += "├──────────┴──────────┴──────────┴──────────┴────────────────────────────┤\n"
+  out += "│ Each driver also needs: 100nF cap (VDD→GND), 100uF cap (VMOT→GND)     │\n"
+  out += "└─────────────────────────────────────────────────────────────────────────┘\n\n"
 
-  const netNameMap: Map<string, string> = new Map()
-  for (const net of sourceNets) {
-    const key = net.subcircuit_connectivity_map_key
-    if (key && net.name) netNameMap.set(key, net.name)
-  }
+  // ---- I2C Bus ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  I2C BUS WIRING                                                        │\n"
+  out += "├──────────────┬─────────────────────────────────────────────────────────┤\n"
+  out += "│ Signal       │ Connected Pins                                          │\n"
+  out += "├──────────────┼─────────────────────────────────────────────────────────┤\n"
+  out += "│ I2C_SCL      │ U1.PB6, U3(MPU6050).SCL, U4(FDC1004).SCL, R_SCL→3.3V │\n"
+  out += "│ I2C_SDA      │ U1.PB7, U3(MPU6050).SDA, U4(FDC1004).SDA, R_SDA→3.3V │\n"
+  out += "│ IMU INT      │ U3(MPU6050).INT → U1.PB5                               │\n"
+  out += "│ MPU6050 AD0  │ GND (I2C address 0x68)                                 │\n"
+  out += "│ FDC1004 ADDR │ GND (I2C address 0x50)                                 │\n"
+  out += "├──────────────┴─────────────────────────────────────────────────────────┤\n"
+  out += "│ Pull-ups: R_SCL=4.7k (VCC3V3→SCL), R_SDA=4.7k (VCC3V3→SDA)          │\n"
+  out += "└─────────────────────────────────────────────────────────────────────────┘\n\n"
 
-  let netlistText = "STM32 Motor & Sensor Control Circuit - Netlist\n"
-  netlistText += "=".repeat(60) + "\n\n"
-  netlistText += `Components: ${sourceComponents.length}\n`
-  netlistText += `Ports: ${sourcePorts.length}\n`
-  netlistText += `Named Nets: ${sourceNets.length}\n\n`
+  // ---- Servo wiring ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  SERVO MOTOR WIRING                                                    │\n"
+  out += "├──────────┬────────────┬────────────────────────────────────────────────┤\n"
+  out += "│ Servo    │ Pin        │ Connected To                                   │\n"
+  out += "├──────────┼────────────┼────────────────────────────────────────────────┤\n"
+  out += "│ SERVO1   │ SIG        │ U1.PA6  (TIM3_CH1 PWM)                        │\n"
+  out += "│          │ VCC        │ VBUS5V  (5V from USB)                          │\n"
+  out += "│          │ GND        │ GND                                            │\n"
+  out += "├──────────┼────────────┼────────────────────────────────────────────────┤\n"
+  out += "│ SERVO2   │ SIG        │ U1.PA7  (TIM3_CH2 PWM)                        │\n"
+  out += "│          │ VCC        │ VBUS5V  (5V from USB)                          │\n"
+  out += "│          │ GND        │ GND                                            │\n"
+  out += "└──────────┴────────────┴────────────────────────────────────────────────┘\n\n"
 
-  netlistText += "COMPONENTS:\n"
-  netlistText += "-".repeat(40) + "\n"
-  for (const comp of sourceComponents) {
-    const ports = sourcePorts.filter((p: any) => p.source_component_id === comp.source_component_id)
-    netlistText += `  ${comp.name} (${ports.length} pins)\n`
-  }
+  // ---- Power distribution ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  POWER DISTRIBUTION                                                    │\n"
+  out += "├──────────┬────────────────────────────────────────────────────────────┤\n"
+  out += "│ Rail     │ Source / Loads                                              │\n"
+  out += "├──────────┼────────────────────────────────────────────────────────────┤\n"
+  out += "│ VBUS5V   │ FROM: J_USB.VBUS (laptop USB)                              │\n"
+  out += "│ (5V)     │   TO: U2(AMS1117).VIN, SERVO1.VCC, SERVO2.VCC             │\n"
+  out += "│          │   CAPS: C_LDO_IN (10uF)                                    │\n"
+  out += "├──────────┼────────────────────────────────────────────────────────────┤\n"
+  out += "│ VCC3V3   │ FROM: U2(AMS1117).VOUT                                     │\n"
+  out += "│ (3.3V)   │   TO: U1(STM32) VDD1+VDD2+VDDA+VBAT                       │\n"
+  out += "│          │       DRV1-4 .VDD+.SLEEP+.RESET                            │\n"
+  out += "│          │       U3(MPU6050).VDD, U4(FDC1004).VDD                     │\n"
+  out += "│          │       R_SCL.pin1, R_SDA.pin1 (I2C pull-ups)                │\n"
+  out += "│          │   CAPS: C1,C2,C3 (100nF), C_LDO_OUT (10uF),               │\n"
+  out += "│          │         C_DRV1-4 (100nF), C_IMU1 (100nF),                  │\n"
+  out += "│          │         C_IMU2 (10nF), C_FDC (100nF)                       │\n"
+  out += "├──────────┼────────────────────────────────────────────────────────────┤\n"
+  out += "│ VMOT     │ FROM: External motor power supply (12-36V)                  │\n"
+  out += "│ (12-36V) │   TO: DRV1-4 .VMOT                                         │\n"
+  out += "│          │   CAPS: C_MOT1-4 (100uF each)                              │\n"
+  out += "├──────────┼────────────────────────────────────────────────────────────┤\n"
+  out += "│ GND      │ All component grounds tied together                         │\n"
+  out += "│          │ 49 pins total on GND rail                                   │\n"
+  out += "└──────────┴────────────────────────────────────────────────────────────┘\n\n"
 
-  netlistText += "\nNETLIST:\n"
-  netlistText += "-".repeat(40) + "\n"
+  // ---- Crystal ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  CRYSTAL OSCILLATOR                                                    │\n"
+  out += "├─────────────────────────────────────────────────────────────────────────┤\n"
+  out += "│ Y1 (8MHz HC49):  pin1 → U1.PD0 (OSC_IN)                               │\n"
+  out += "│                  pin2 → U1.PD1 (OSC_OUT)                               │\n"
+  out += "│ C_Y1 (20pF):    pin1 → Y1.pin1,  pin2 → GND                           │\n"
+  out += "│ C_Y2 (20pF):    pin1 → Y1.pin2,  pin2 → GND                           │\n"
+  out += "└─────────────────────────────────────────────────────────────────────────┘\n\n"
+
+  // ---- USB ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  USB CONNECTION (Laptop Communication)                                 │\n"
+  out += "├─────────────────────────────────────────────────────────────────────────┤\n"
+  out += "│ J_USB.VBUS → VBUS5V (5V rail)                                          │\n"
+  out += "│ J_USB.GND  → GND                                                       │\n"
+  out += "│ J_USB.DM   → U1.PA11 (USB D-)                                          │\n"
+  out += "│ J_USB.DP   → U1.PA12 (USB D+)                                          │\n"
+  out += "└─────────────────────────────────────────────────────────────────────────┘\n\n"
+
+  // ---- LED ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  STATUS LED                                                            │\n"
+  out += "├─────────────────────────────────────────────────────────────────────────┤\n"
+  out += "│ U1.PC13 → R_LED(1k).pin1 → R_LED.pin2 → LED1.anode → LED1.cathode → GND│\n"
+  out += "└─────────────────────────────────────────────────────────────────────────┘\n\n"
+
+  // ---- Full netlist by net ----
+  out += "┌─────────────────────────────────────────────────────────────────────────┐\n"
+  out += "│  FULL NETLIST (every net, every pin)                                   │\n"
+  out += "└─────────────────────────────────────────────────────────────────────────┘\n\n"
 
   const sortedNets = [...netConnections.entries()]
-    .filter(([_, pins]) => pins.size > 1)
+    .filter(([_, pins]) => pins.length > 1)
     .sort(([a], [b]) => {
-      const nameA = netNameMap.get(a) || a
-      const nameB = netNameMap.get(b) || b
+      const nameA = finalNetNames.get(a) || a
+      const nameB = finalNetNames.get(b) || b
       return nameA.localeCompare(nameB)
     })
 
   for (const [key, pins] of sortedNets) {
-    const netName = netNameMap.get(key) || `signal_${key.slice(0, 12)}`
-    netlistText += `\n  NET: ${netName}\n`
-    for (const pin of [...pins].sort()) {
-      netlistText += `    - ${pin}\n`
+    const netName = finalNetNames.get(key) || key
+    const pinStrs = pins.map((p) => `${p.comp}.${p.pin}`).sort()
+    out += `  NET ${netName}:\n`
+    for (const p of pinStrs) {
+      out += `    ─── ${p}\n`
     }
+    out += "\n"
   }
 
-  const netlistPath = path.join(outDir, "stm32-motor-sensor-control.netlist.txt")
-  fs.writeFileSync(netlistPath, netlistText)
-  console.log(`Netlist: ${netlistPath}`)
+  const wiringPath = path.join(outDir, "stm32-motor-sensor-control.wiring-table.txt")
+  fs.writeFileSync(wiringPath, out)
+  console.log(`Wiring table: ${wiringPath} (${(fs.statSync(wiringPath).size / 1024).toFixed(0)} KB)`)
 
-  console.log("\nDone! All files in output/")
+  console.log("\nDone! Output files:")
+  console.log(`  ${wiringPath}  ← USE THIS to wire in Proteus`)
+  console.log(`  ${jsonPath}`)
 }
 
 main().catch(console.error)
